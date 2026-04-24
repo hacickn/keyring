@@ -2,8 +2,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:otp/otp.dart';
+import '../../controllers/app_controller.dart';
 import '../../controllers/vault_controller.dart';
 import '../../models/account.dart';
+import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/service_avatar.dart';
 
@@ -12,34 +15,43 @@ class CodeDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final account = Get.arguments as Account?;
-    final name = account?.name ?? 'GitHub';
-    final login = account?.login ?? 'riley.ng';
-    final code = account?.code ?? '438210';
-    final color = account?.color ?? const Color(0xFF0B1220);
+    final passed = Get.arguments as Account;
     final topPad = MediaQuery.of(context).padding.top;
+    final ctrl = Get.find<VaultController>();
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: Column(
-        children: [
-          SizedBox(height: topPad),
-          _buildTopBar(),
-          const SizedBox(height: 32),
-          _buildIdentity(name: name, login: login, color: color),
-          const SizedBox(height: 28),
-          _buildCodeRing(code: code),
-          const SizedBox(height: 24),
-          _buildActions(code: code),
-          const SizedBox(height: 20),
-          _buildPrevCode(),
-          const Spacer(),
-        ],
-      ),
+      body: Obx(() {
+        final current = ctrl.accounts.firstWhereOrNull((a) => a.id == passed.id);
+        if (current == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => Get.back());
+          return const SizedBox.shrink();
+        }
+        final code = ctrl.liveCodes[current.id] ?? '------';
+        return Column(
+          children: [
+            SizedBox(height: topPad),
+            _buildTopBar(current),
+            const SizedBox(height: 32),
+            _buildIdentity(
+              name: current.name,
+              login: current.login,
+              color: current.color,
+            ),
+            const SizedBox(height: 28),
+            _buildCodeRing(ctrl: ctrl, code: code),
+            const SizedBox(height: 24),
+            _buildActions(account: current, code: code),
+            const SizedBox(height: 20),
+            _buildPrevCode(account: current),
+            const Spacer(),
+          ],
+        );
+      }),
     );
   }
 
-  Widget _buildTopBar() {
+  Widget _buildTopBar(Account account) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
@@ -50,6 +62,8 @@ class CodeDetailScreen extends StatelessWidget {
             child: const Icon(Icons.chevron_left, size: 22, color: AppColors.ink),
           ),
           _NavButton(
+            onTap: () =>
+                Get.toNamed(AppRoutes.accountSettings, arguments: account),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -107,93 +121,87 @@ class CodeDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCodeRing({required String code}) {
-    final ctrl = Get.find<VaultController>();
-    return Obx(() {
-      final t = ctrl.t;
-      final seconds = ctrl.secondsRemaining.value;
-      final expiring = t < 0.2;
-      final ringColor = expiring ? AppColors.orange : AppColors.blue;
-      final codeA = code.substring(0, 3);
-      final codeB = code.substring(3);
+  Widget _buildCodeRing({required VaultController ctrl, required String code}) {
+    final t = ctrl.t;
+    final seconds = ctrl.secondsRemaining.value;
+    final expiring = t < 0.2;
+    final ringColor = expiring ? AppColors.orange : AppColors.blue;
+    final codeA = code.substring(0, 3);
+    final codeB = code.substring(3);
 
-      return SizedBox(
-        width: 260,
-        height: 260,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            CustomPaint(
-              size: const Size(260, 260),
-              painter: _LargeRingPainter(t: t, color: ringColor),
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'One-time code',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.muted,
-                    letterSpacing: 1.5,
-                  ),
+    return SizedBox(
+      width: 260,
+      height: 260,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: const Size(260, 260),
+            painter: _LargeRingPainter(t: t, color: ringColor),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'One-time code',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.muted,
+                  letterSpacing: 1.5,
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      codeA,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 52,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink,
-                        letterSpacing: 2,
-                      ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    codeA,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 52,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                      letterSpacing: 2,
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      codeB,
-                      style: TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 52,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    codeB,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 52,
+                      fontWeight: FontWeight.w700,
+                      color: expiring ? AppColors.orange : AppColors.ink,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(fontSize: 14, color: AppColors.muted),
+                  children: [
+                    const TextSpan(text: 'refreshes in '),
+                    TextSpan(
+                      text: '${seconds}s',
+                      style: const TextStyle(
+                        color: AppColors.blue,
                         fontWeight: FontWeight.w700,
-                        color: expiring ? AppColors.orange : AppColors.ink,
-                        letterSpacing: 2,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                RichText(
-                  text: TextSpan(
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppColors.muted,
-                    ),
-                    children: [
-                      const TextSpan(text: 'refreshes in '),
-                      TextSpan(
-                        text: '${seconds}s',
-                        style: const TextStyle(
-                          color: AppColors.blue,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    });
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildActions({required String code}) {
+  Widget _buildActions({required Account account, required String code}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
@@ -202,6 +210,7 @@ class CodeDetailScreen extends StatelessWidget {
             child: GestureDetector(
               onTap: () {
                 Clipboard.setData(ClipboardData(text: code));
+                Get.find<AppController>().recordCopy(account, code);
                 Get.snackbar(
                   '',
                   'Code copied',
@@ -245,23 +254,49 @@ class CodeDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.line),
+          GestureDetector(
+            onTap: () => Get.snackbar(
+              '',
+              'QR code coming soon',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: AppColors.ink,
+              colorText: Colors.white,
+              margin: const EdgeInsets.all(16),
+              borderRadius: 14,
+              duration: const Duration(seconds: 2),
             ),
-            alignment: Alignment.center,
-            child: const Icon(Icons.qr_code_2, size: 24, color: AppColors.ink),
+            child: Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.line),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.qr_code_2, size: 24, color: AppColors.ink),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPrevCode() {
+  Widget _buildPrevCode({required Account account}) {
+    String prev;
+    try {
+      final prevEpoch = DateTime.now().millisecondsSinceEpoch - 30 * 1000;
+      prev = OTP.generateTOTPCodeString(
+        account.secretKey,
+        prevEpoch,
+        length: 6,
+        interval: 30,
+        algorithm: Algorithm.SHA1,
+        isGoogle: true,
+      );
+    } catch (_) {
+      prev = '------';
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Container(
@@ -271,9 +306,9 @@ class CodeDetailScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.line),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Text(
+            const Text(
               'PREV',
               style: TextStyle(
                 fontSize: 11,
@@ -282,10 +317,10 @@ class CodeDetailScreen extends StatelessWidget {
                 letterSpacing: 0.4,
               ),
             ),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Text(
-              '916 337',
-              style: TextStyle(
+              '${prev.substring(0, 3)} ${prev.substring(3)}',
+              style: const TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 15,
                 color: AppColors.mutedSoft,

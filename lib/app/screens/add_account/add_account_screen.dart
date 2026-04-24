@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../controllers/add_account_controller.dart';
 import '../../theme/app_theme.dart';
 
 class AddAccountScreen extends StatelessWidget {
@@ -165,26 +166,229 @@ class AddAccountScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _BottomAction(
-              label: 'Enter setup key',
-              icon: Icons.mail_outline,
-              onTap: () {},
+      child: Builder(
+        builder: (context) => Row(
+          children: [
+            Expanded(
+              child: _BottomAction(
+                label: 'Enter setup key',
+                icon: Icons.mail_outline,
+                onTap: () => _showSetupKeySheet(context),
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _BottomAction(
-              label: 'Scan image',
-              icon: Icons.camera_alt_outlined,
-              primary: true,
-              onTap: () {},
+            const SizedBox(width: 10),
+            Expanded(
+              child: _BottomAction(
+                label: 'Scan image',
+                icon: Icons.camera_alt_outlined,
+                primary: true,
+                onTap: () => Get.snackbar(
+                  '',
+                  'QR scanning coming soon',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: AppColors.ink,
+                  colorText: Colors.white,
+                  margin: const EdgeInsets.all(16),
+                  borderRadius: 14,
+                  duration: const Duration(seconds: 2),
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+
+  void _showSetupKeySheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const _SetupKeySheet(),
+    );
+  }
+}
+
+class _SetupKeySheet extends StatelessWidget {
+  const _SetupKeySheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final ctrl = Get.find<AddAccountController>();
+    final insets = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: insets),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Enter setup key',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink,
+                letterSpacing: -0.4,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Enter the account details and the base32 secret from your site\'s 2FA setup.',
+              style: TextStyle(fontSize: 13, color: AppColors.muted, height: 1.4),
+            ),
+            const SizedBox(height: 18),
+            Obx(() => _LabeledField(
+                  label: 'Account name',
+                  controller: ctrl.nameCtrl,
+                  hint: 'e.g. r.ng@example.com',
+                  error: ctrl.nameError.value,
+                )),
+            const SizedBox(height: 14),
+            _LabeledField(
+              label: 'Issuer (optional)',
+              controller: ctrl.issuerCtrl,
+              hint: 'e.g. GitHub',
+            ),
+            const SizedBox(height: 14),
+            Obx(() => _LabeledField(
+                  label: 'Secret key',
+                  controller: ctrl.secretCtrl,
+                  hint: 'JBSWY3DPEHPK3PXP',
+                  monospace: true,
+                  error: ctrl.secretError.value,
+                )),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () {
+                if (ctrl.submit()) {
+                  Get.back();
+                  Get.back();
+                  Get.snackbar(
+                    '',
+                    'Account added',
+                    snackPosition: SnackPosition.BOTTOM,
+                    backgroundColor: AppColors.ink,
+                    colorText: Colors.white,
+                    margin: const EdgeInsets.all(16),
+                    borderRadius: 14,
+                    duration: const Duration(seconds: 2),
+                  );
+                }
+              },
+              child: Container(
+                height: 54,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppColors.blue,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.blue.withValues(alpha: 0.28),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: const Text(
+                  'Save account',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LabeledField extends StatelessWidget {
+  final String label;
+  final String hint;
+  final TextEditingController controller;
+  final String? error;
+  final bool monospace;
+
+  const _LabeledField({
+    required this.label,
+    required this.hint,
+    required this.controller,
+    this.error,
+    this.monospace = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = error != null ? AppColors.orange : AppColors.line;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: AppColors.muted,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor, width: error != null ? 1.5 : 1),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          child: TextField(
+            controller: controller,
+            autocorrect: false,
+            style: TextStyle(
+              fontFamily: monospace ? 'monospace' : null,
+              fontSize: 15,
+              color: AppColors.ink,
+              letterSpacing: monospace ? 1.2 : 0,
+            ),
+            cursorColor: AppColors.blue,
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              hintText: hint,
+              hintStyle: const TextStyle(color: AppColors.mutedSoft),
+              isDense: true,
+            ),
+          ),
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text(
+              error!,
+              style: const TextStyle(fontSize: 12, color: AppColors.orange),
+            ),
+          ),
+      ],
     );
   }
 }

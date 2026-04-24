@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../controllers/app_controller.dart';
 import '../../controllers/vault_controller.dart';
 import '../../models/account.dart';
+import '../../models/sync_state.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/code_text.dart';
@@ -25,11 +27,32 @@ class VaultScreen extends StatelessWidget {
             child: Obx(() {
               final t = ctrl.t;
               final expiring = ctrl.isExpiring;
+              final accounts = ctrl.accounts;
+              if (accounts.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Text(
+                      'No accounts yet.\nTap + to add one.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.muted, height: 1.5),
+                    ),
+                  ),
+                );
+              }
               return ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                itemCount: ctrl.accounts.length,
-                itemBuilder: (context, i) =>
-                    _AccountRow(account: ctrl.accounts[i], t: t, expiring: expiring),
+                itemCount: accounts.length,
+                itemBuilder: (context, i) {
+                  final account = accounts[i];
+                  final code = ctrl.liveCodes[account.id] ?? '------';
+                  return _AccountRow(
+                    account: account,
+                    code: code,
+                    t: t,
+                    expiring: expiring,
+                  );
+                },
               );
             }),
           ),
@@ -143,35 +166,75 @@ class _TimerStrip extends StatelessWidget {
               ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.blueSoft,
-              borderRadius: BorderRadius.circular(99),
-            ),
-            child: const Text(
-              'SYNCED',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppColors.blue,
-                letterSpacing: 0.3,
-              ),
-            ),
-          ),
+          const _SyncBadge(),
         ],
       ),
     );
   }
 }
 
+class _SyncBadge extends StatelessWidget {
+  const _SyncBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = Get.find<AppController>();
+    return Obx(() {
+      String label;
+      Color bg;
+      Color fg;
+      if (!app.iCloudEnabled.value) {
+        label = 'LOCAL';
+        bg = AppColors.line;
+        fg = AppColors.muted;
+      } else {
+        switch (app.syncState.value) {
+          case SyncState.syncing:
+            label = 'SYNCING';
+            bg = AppColors.orangeSoft;
+            fg = AppColors.orange;
+            break;
+          case SyncState.error:
+            label = 'ERROR';
+            bg = AppColors.orangeSoft;
+            fg = AppColors.orange;
+            break;
+          case SyncState.synced:
+            label = 'SYNCED';
+            bg = AppColors.blueSoft;
+            fg = AppColors.blue;
+            break;
+        }
+      }
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(99),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: fg,
+            letterSpacing: 0.3,
+          ),
+        ),
+      );
+    });
+  }
+}
+
 class _AccountRow extends StatelessWidget {
   final Account account;
+  final String code;
   final double t;
   final bool expiring;
 
   const _AccountRow({
     required this.account,
+    required this.code,
     required this.t,
     required this.expiring,
   });
@@ -180,6 +243,8 @@ class _AccountRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => Get.toNamed(AppRoutes.codeDetail, arguments: account),
+      onLongPress: () =>
+          Get.toNamed(AppRoutes.accountSettings, arguments: account),
       child: Container(
         margin: const EdgeInsets.only(bottom: 2),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -220,7 +285,7 @@ class _AccountRow extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             CodeText(
-              code: account.code,
+              code: code,
               fontSize: 22,
               letterSpacing: 1.5,
               color: expiring ? AppColors.orange : AppColors.ink,
@@ -263,7 +328,12 @@ class _BottomTabBar extends StatelessWidget {
             label: 'History',
             active: selectedIndex == 1,
             icon: _HistoryIcon(active: selectedIndex == 1),
-            onTap: () => ctrl.selectedTabIndex.value = 1,
+            onTap: () {
+              ctrl.selectedTabIndex.value = 1;
+              Get.toNamed(AppRoutes.history)?.then(
+                (_) => ctrl.selectedTabIndex.value = 0,
+              );
+            },
           ),
           _TabItem(
             label: 'Settings',
@@ -271,7 +341,9 @@ class _BottomTabBar extends StatelessWidget {
             icon: _SettingsIcon(active: selectedIndex == 2),
             onTap: () {
               ctrl.selectedTabIndex.value = 2;
-              Get.toNamed(AppRoutes.settings);
+              Get.toNamed(AppRoutes.settings)?.then(
+                (_) => ctrl.selectedTabIndex.value = 0,
+              );
             },
           ),
         ],

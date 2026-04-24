@@ -1,54 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../controllers/app_controller.dart';
 import '../../models/account.dart';
+import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/service_avatar.dart';
 
-class AccountSettingsScreen extends StatefulWidget {
+class AccountSettingsScreen extends StatelessWidget {
   const AccountSettingsScreen({super.key});
 
   @override
-  State<AccountSettingsScreen> createState() => _AccountSettingsScreenState();
-}
-
-class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
-  final requireFaceId = true.obs;
-  final hideByDefault = false.obs;
-
-  @override
   Widget build(BuildContext context) {
-    final account = Get.arguments as Account?;
-    final name = account?.name ?? 'AWS Root';
-    final login = account?.login ?? 'r.ng+aws';
-    final color = account?.color ?? const Color(0xFF232F3E);
+    final passed = Get.arguments as Account;
     final topPad = MediaQuery.of(context).padding.top;
+    final app = Get.find<AppController>();
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: Column(
-        children: [
-          SizedBox(height: topPad),
-          _buildHeader(name),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  const SizedBox(height: 28),
-                  _buildIdentity(name: name, login: login, color: color),
-                  const SizedBox(height: 28),
-                  _buildDetailsGroup(),
-                  const SizedBox(height: 20),
-                  _buildSecurityGroup(
-                      requireFaceId: requireFaceId, hideByDefault: hideByDefault),
-                  const SizedBox(height: 24),
-                  _buildDangerGroup(name: name),
-                  const SizedBox(height: 40),
-                ],
+      body: Obx(() {
+        final current =
+            app.accounts.firstWhereOrNull((a) => a.id == passed.id);
+        if (current == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Get.until((r) => r.settings?.name == AppRoutes.vault);
+          });
+          return const SizedBox.shrink();
+        }
+        return Column(
+          children: [
+            SizedBox(height: topPad),
+            _buildHeader(current.name),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 28),
+                    _buildIdentity(account: current),
+                    const SizedBox(height: 28),
+                    _buildDetailsGroup(context, current, app),
+                    const SizedBox(height: 20),
+                    _buildSecurityGroup(current, app),
+                    const SizedBox(height: 24),
+                    _buildDangerGroup(context, current, app),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      }),
     );
   }
 
@@ -88,17 +89,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
   }
 
-  Widget _buildIdentity({
-    required String name,
-    required String login,
-    required Color color,
-  }) {
+  Widget _buildIdentity({required Account account}) {
     return Column(
       children: [
-        ServiceAvatar(letter: name[0], color: color, size: 68, borderRadius: 20),
+        ServiceAvatar(
+          letter: account.name[0],
+          color: account.color,
+          size: 68,
+          borderRadius: 20,
+        ),
         const SizedBox(height: 14),
         Text(
-          name,
+          account.name,
           style: const TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w700,
@@ -107,15 +109,16 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ),
         ),
         const SizedBox(height: 2),
-        const Text(
-          'Added Mar 12, 2026',
-          style: TextStyle(fontSize: 13, color: AppColors.muted),
+        Text(
+          'Added ${_formatDate(account.addedDate)}',
+          style: const TextStyle(fontSize: 13, color: AppColors.muted),
         ),
       ],
     );
   }
 
-  Widget _buildDetailsGroup() {
+  Widget _buildDetailsGroup(
+      BuildContext context, Account account, AppController app) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -133,22 +136,52 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               ),
             ),
           ),
-          _SettingsCard(
-            rows: [
-              _SettingsRow(label: 'Issuer', value: 'AWS'),
-              _SettingsRow(label: 'Account', value: 'r.ng+aws'),
-              _SettingsRow(label: 'Algorithm', value: 'SHA-1 · 6 digits', isLast: true),
-            ],
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Column(
+              children: [
+                _SettingsRow(
+                  label: 'Issuer',
+                  value: account.name,
+                  onTap: () => _editField(
+                    context,
+                    title: 'Issuer',
+                    initial: account.name,
+                    onSave: (v) =>
+                        app.updateAccount(account.copyWith(name: v)),
+                  ),
+                ),
+                const Divider(height: 1, color: AppColors.line, indent: 16, endIndent: 16),
+                _SettingsRow(
+                  label: 'Account',
+                  value: account.login,
+                  onTap: () => _editField(
+                    context,
+                    title: 'Account',
+                    initial: account.login,
+                    onSave: (v) =>
+                        app.updateAccount(account.copyWith(login: v)),
+                  ),
+                ),
+                const Divider(height: 1, color: AppColors.line, indent: 16, endIndent: 16),
+                const _SettingsRow(
+                  label: 'Algorithm',
+                  value: 'SHA-1 · 6 digits',
+                  isLast: true,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSecurityGroup({
-    required RxBool requireFaceId,
-    required RxBool hideByDefault,
-  }) {
+  Widget _buildSecurityGroup(Account account, AppController app) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -174,18 +207,20 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             ),
             child: Column(
               children: [
-                Obx(() => _ToggleRow(
-                      label: 'Require Face ID to reveal',
-                      value: requireFaceId.value,
-                      onChanged: (v) => requireFaceId.value = v,
-                    )),
+                _ToggleRow(
+                  label: 'Require Face ID to reveal',
+                  value: account.requireBiometric,
+                  onChanged: (v) => app
+                      .updateAccount(account.copyWith(requireBiometric: v)),
+                ),
                 const Divider(height: 1, color: AppColors.line, indent: 16, endIndent: 16),
-                Obx(() => _ToggleRow(
-                      label: 'Hide code by default',
-                      value: hideByDefault.value,
-                      onChanged: (v) => hideByDefault.value = v,
-                      isLast: true,
-                    )),
+                _ToggleRow(
+                  label: 'Hide code by default',
+                  value: account.hideByDefault,
+                  onChanged: (v) =>
+                      app.updateAccount(account.copyWith(hideByDefault: v)),
+                  isLast: true,
+                ),
               ],
             ),
           ),
@@ -194,7 +229,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
   }
 
-  Widget _buildDangerGroup({required String name}) {
+  Widget _buildDangerGroup(
+      BuildContext context, Account account, AppController app) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: GestureDetector(
@@ -203,7 +239,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             AlertDialog(
               title: const Text('Remove account?'),
               content: Text(
-                  'This will permanently remove $name from your vault.'),
+                  'This will permanently remove ${account.name} from your vault.'),
               actions: [
                 TextButton(
                   onPressed: () => Get.back(),
@@ -212,7 +248,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 TextButton(
                   onPressed: () {
                     Get.back();
-                    Get.back();
+                    app.removeAccount(account.id);
+                    Get.until((r) => r.settings?.name == AppRoutes.vault);
                   },
                   child: const Text(
                     'Remove',
@@ -254,23 +291,45 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       ),
     );
   }
-}
 
-class _SettingsCard extends StatelessWidget {
-  final List<Widget> rows;
-
-  const _SettingsCard({required this.rows});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.line),
+  Future<void> _editField(
+    BuildContext context, {
+    required String title,
+    required String initial,
+    required ValueChanged<String> onSave,
+  }) async {
+    final controller = TextEditingController(text: initial);
+    await Get.dialog(
+      AlertDialog(
+        title: Text('Edit $title'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final v = controller.text.trim();
+              if (v.isNotEmpty) onSave(v);
+              Get.back();
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
-      child: Column(children: rows),
     );
+  }
+
+  String _formatDate(DateTime d) {
+    const months = [
+      'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
 }
 
@@ -278,39 +337,47 @@ class _SettingsRow extends StatelessWidget {
   final String label;
   final String value;
   final bool isLast;
+  final VoidCallback? onTap;
 
   const _SettingsRow({
     required this.label,
     required this.value,
     this.isLast = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(fontSize: 15, color: AppColors.ink),
-                ),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 15, color: AppColors.ink),
               ),
-              Text(
+            ),
+            Flexible(
+              child: Text(
                 value,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
                 style: const TextStyle(fontSize: 15, color: AppColors.muted),
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right, size: 16, color: AppColors.mutedSoft),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.chevron_right,
+              size: 16,
+              color: onTap == null ? AppColors.line : AppColors.mutedSoft,
+            ),
+          ],
         ),
-        if (!isLast)
-          const Divider(height: 1, color: AppColors.line, indent: 16, endIndent: 16),
-      ],
+      ),
     );
   }
 }
@@ -394,7 +461,6 @@ class _WarningPainter extends CustomPainter {
       ..close();
     canvas.drawPath(path, fillPaint);
 
-    // Exclamation
     canvas.drawLine(
       Offset(size.width / 2, size.height * 0.35),
       Offset(size.width / 2, size.height * 0.65),

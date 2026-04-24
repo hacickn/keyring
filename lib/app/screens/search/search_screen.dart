@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/search_controller.dart' show VaultSearchController;
+import '../../controllers/vault_controller.dart';
 import '../../models/account.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
@@ -23,11 +24,6 @@ class _SearchScreenState extends State<SearchScreen> {
     super.initState();
     _textCtrl = TextEditingController(text: _ctrl.query.value);
     _textCtrl.addListener(() => _ctrl.setQuery(_textCtrl.text));
-    // Pre-fill with 'cloud' to match the design
-    Future.microtask(() {
-      _textCtrl.text = 'cloud';
-      _ctrl.setQuery('cloud');
-    });
   }
 
   @override
@@ -217,7 +213,13 @@ class _ResultRow extends StatelessWidget {
                 ],
               ),
             ),
-            CodeText(code: account.code, fontSize: 18, letterSpacing: 1.2),
+            Obx(() {
+              final vault = Get.isRegistered<VaultController>()
+                  ? Get.find<VaultController>()
+                  : null;
+              final code = vault?.liveCodes[account.id] ?? '------';
+              return CodeText(code: code, fontSize: 18, letterSpacing: 1.2);
+            }),
             const SizedBox(width: 4),
             const Icon(Icons.chevron_right, size: 16, color: AppColors.mutedSoft),
           ],
